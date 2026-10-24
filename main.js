@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { criarGato } from '../gato.js?v=202610220925';
+import { criarGato } from './gato.js?v=202610241330';
 import { texLadrilho, criarMesa, criarNichos, criarCadeira, criarEstante, criarEstanteLivros, criarBau, criarQuadroBranco, criarBandeja } from './moveis.js';
 import { criarBusca } from './busca.js';
 import { criarInventario, criarMapaEstante } from './inventario.js';
@@ -211,7 +211,7 @@ function fecharMenus() { $('anotarMenu').hidden = true; $('menu').classList.remo
 
 // ---------- avatar ----------
 const ALTURA_GATO = 1.3;
-const gltf = await new GLTFLoader().loadAsync(MODELO, (e) => { if (e.total) $('barra').style.width = (100 * e.loaded / e.total) + '%'; });
+const gltf = await new GLTFLoader().loadAsync(MODELO, (e) => { $('barra').style.width = Math.min(98, 100 * e.loaded / (e.total || 1110668)) + '%'; });     // sem tamanho informado, usa o tamanho do gatinho leve
 $('carregando').classList.add('fim');
 const gato = criarGato(gltf);
 const caixaG = new THREE.Box3().setFromObject(gato.modelo);
