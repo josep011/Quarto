@@ -288,7 +288,7 @@
 <div id="dica">WASD ou círculo para andar · arraste para girar a câmera · toque nos móveis para usar · E usa o que está perto</div>
 
 <script type="importmap">
-{ "imports": { "three": "./lib/three.module.js?v=202610241330", "three/addons/environments/RoomEnvironment.js": "./lib/RoomEnvironment.js?v=202610241330", "three/addons/loaders/GLTFLoader.js": "./lib/GLTFLoader.js?v=202610241330", "three/addons/geometries/RoundedBoxGeometry.js": "./lib/RoundedBoxGeometry.js?v=202610241330", "three/addons/utils/BufferGeometryUtils.js": "./lib/BufferGeometryUtils.js?v=202610220925" } }
+{ "imports": { "three": "./three.module.js?v=202610241330", "three/addons/environments/RoomEnvironment.js": "./RoomEnvironment.js?v=202610241330", "three/addons/loaders/GLTFLoader.js": "./GLTFLoader.js?v=202610241330", "three/addons/geometries/RoundedBoxGeometry.js": "./RoundedBoxGeometry.js?v=202610241330", "three/addons/utils/BufferGeometryUtils.js": "./BufferGeometryUtils.js?v=202610220925" } }
 </script>
 <script>
   // se faltar algum arquivo, avisa na tela de carregar em vez de ficar parado
@@ -296,7 +296,7 @@
     function falhou(qual) {
       var c = document.getElementById('carregando'); if (!c || c.classList.contains('fim')) return;
       var p = document.getElementById('erroCarregar'); if (!p) { p = document.createElement('p'); p.id = 'erroCarregar'; c.firstElementChild.appendChild(p); }
-      p.textContent = 'Não consegui abrir o quarto' + (qual ? ' (faltou: ' + qual + ')' : '') + '. Confira se a pasta inteira foi enviada, inclusive a pasta lib e o gatinho_terno_leve.glb.';
+      p.textContent = 'Não consegui abrir o quarto' + (qual ? ' (faltou: ' + qual + ')' : '') + '. Confira se a todos os arquivos foram enviados, inclusive o three.module.js e o gatinho_terno_leve.glb.';
     }
     window.addEventListener('error', function (e) { var t = e.target; if (t && (t.src || t.href)) falhou(String(t.src || t.href).split('/').pop().split('?')[0]); else falhou(''); }, true);
     window.addEventListener('unhandledrejection', function (e) { var m = String(e.reason && (e.reason.message || e.reason) || ''); falhou(/glb|404|fetch/i.test(m) ? 'gatinho_terno_leve.glb' : ''); });
