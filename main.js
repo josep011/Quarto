@@ -14,6 +14,7 @@ import { criarProjetor } from './projetor.js?v=202610250120';
 import { criarComputador, criarTV } from './retro.js';
 import { criarTelaPc, criarTelaTv } from './telas.js';
 import { criarPato } from './pato.js?v=202610250300';
+import { criarBiblioteca } from './biblioteca.js?v=202610251400';
 
 const MODELO = window.QUARTO_MODELO || './gatinho_terno_leve.glb?v=202610241300';      // cópia leve (~1 MB, menos triângulos) só do quarto
 const $ = (id) => document.getElementById(id);
@@ -106,9 +107,11 @@ const estante = criarEstante({ colunas: COL, linhas: LIN }); estante.g.position.
 bloquear(x0, z1 - estante.fundo - 0.02, x1, z1);
 const caixaPorId = new Map(estante.caixas.map((c) => [c.id, c]));
 
-const livros = criarEstanteLivros(), LIV = { z: -0.6 };
+const livros = criarEstanteLivros({ comLivros: false }), LIV = { z: -0.6 };
 livros.g.position.set(x1, 0, LIV.z); livros.g.rotation.y = Math.PI; cena.add(livros.g);
 bloquear(x1 - livros.D, LIV.z - livros.L / 2, x1, LIV.z + livros.L / 2);
+// os livros da estante: clássicos em domínio público, com capa, que dá para puxar e ler
+const biblioteca = criarBiblioteca({ estante: livros, aviso });
 const bau = criarBau(), BAU = { z: LIV.z + livros.L / 2 + 0.18 + bau.L / 2 };      // à direita de quem olha para os livros
 bau.g.position.set(x1, 0, BAU.z); bau.g.rotation.y = Math.PI; cena.add(bau.g);
 bloquear(x1 - bau.D - 0.02, BAU.z - bau.L / 2, x1, BAU.z + bau.L / 2);
@@ -311,6 +314,8 @@ function irAteCaixa(c, slot) { if (!c) return; irAte(c.x, z1 - estante.fundo - 0
 const irAteBau = (slot) => irAte(x1 - bau.D - 0.5, BAU.z, x1, BAU.z, () => abrirBau(slot));
 const irAteEntrada = (slot) => (eu.sentado === 'cadeira' ? abrirEntrada(slot) : irAte(BAND.x + 0.2, MESA.z + 0.66, BAND.x, MESA.z, () => abrirEntrada(slot)));
 function irAteRecipiente(id, slot) { if (id === 'entrada') irAteEntrada(slot); else if (id === 'bau') irAteBau(slot); else irAteCaixa(caixaPorId.get(id), slot); }
+const irAteLivros = (depois) => irAte(x1 - livros.D - 0.55, LIV.z, x1, LIV.z, depois);
+const abrirEstanteLivros = () => irAteLivros(() => biblioteca.abrirLista((i) => biblioteca.abrirLivro(i)));
 const irAteQuadro = () => irAte(x0 + 0.75, QB.z, x0, QB.z, () => quadro.abrir());
 const irAteMural = () => irAte(x0 + 0.75, MU.z, x0, MU.z, () => mural.abrir());
 let assistindo = false;
@@ -337,6 +342,7 @@ const PERTO = [
   { id: 'pc', rotulo: () => (pc.ligado() ? 'Usar o computador' : 'Ligar o computador'), perto: () => eu.sentado === 'cadeira' || Math.hypot(eu.x - MESA.x, eu.z - (MESA.z + 0.7)) < 1.2, fazer: usarPc },
   { id: 'tv', rotulo: () => (tv.ligado() ? 'Ver a TV' : 'Ligar a TV'), perto: () => eu.sentado === 'cadeira' || Math.hypot(eu.x - (MESA.x + 0.8), eu.z - (MESA.z + 0.7)) < 1.2, fazer: verTv },
   { id: 'estante', rotulo: () => 'Estante de caixas', perto: () => eu.z > z1 - 1.7 || eu.sentado === 'cadeira', fazer: () => mapa.abrir() },
+  { id: 'livros', rotulo: () => 'Pegar um livro', perto: () => Math.hypot(eu.x - (x1 - 0.95), eu.z - LIV.z) < 1.4, fazer: abrirEstanteLivros },
   { id: 'bau', rotulo: () => 'Abrir o baú', perto: () => Math.hypot(eu.x - (x1 - 0.8), eu.z - BAU.z) < 1.4, fazer: irAteBau },
   { id: 'projetor', rotulo: () => 'Projetor', perto: () => eu.z < z0 + 3.8 && eu.x > TELA.x - 2.2 && eu.x < TELA.x + 2.6, fazer: () => projetor.abrirPainel() },
   { id: 'quadro', rotulo: () => 'Quadro branco', perto: () => eu.x < x0 + 1.8 && Math.abs(eu.z - QB.z) < 1.4, fazer: irAteQuadro },
@@ -385,10 +391,12 @@ $('cena').addEventListener('pointerup', (e) => {
   if (!toque) return;
   fecharMenus();
   ponteiro.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); raio.setFromCamera(ponteiro, camera);
-  const hit = raio.intersectObjects([bandeja.g, pc.g, tv.g, alvoCorda, bulbo, puxador, estante.corpo, estante.tampa, bau.g, quadroBranco.g, cadeira.g, cena.getObjectByName('muralGrupo'), projetor.aparelho, projetor.ligado() ? projetor.imagem : null, pato.grupo].filter(Boolean), true)[0];
+  const hit = raio.intersectObjects([bandeja.g, pc.g, tv.g, alvoCorda, bulbo, puxador, estante.corpo, estante.tampa, bau.g, quadroBranco.g, cadeira.g, cena.getObjectByName('muralGrupo'), projetor.aparelho, projetor.ligado() ? projetor.imagem : null, pato.grupo, biblioteca.malha, livros.g].filter(Boolean), true)[0];
   if (!hit || hit.distance > 7) return;
   const dono = (o, g) => { for (let p = o; p; p = p.parent) if (p === g) return true; return false; };
   if (dono(hit.object, pato.grupo)) carinhoNoPato();
+  else if (hit.object === biblioteca.malha) { const i = biblioteca.indiceDoToque(hit.faceIndex); irAteLivros(() => biblioteca.abrirLivro(i)); }
+  else if (dono(hit.object, livros.g)) abrirEstanteLivros();
   else if (hit.object === estante.corpo || hit.object === estante.tampa) irAteCaixa(estante.caixas[hit.instanceId]);
   else if (dono(hit.object, bandeja.g)) irAteEntrada();
   else if (dono(hit.object, pc.g)) usarPc();
@@ -438,13 +446,13 @@ $('arqBackup').addEventListener('change', async (e) => {
 let ultimo = performance.now();
 const olhar = new THREE.Vector3(), desejada = new THREE.Vector3();
 const sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-const algoAberto = () => telaPc.aberta() || telaTv.aberta() || projetor.apresentando() || busca.aberto() || inventario.aberto() || quadro.aberto() || mural.aberto() || mapa.aberto();
-const telaCheia = () => telaPc.aberta() || telaTv.aberta() || busca.aberto() || quadro.aberto() || mural.aberto() || mapa.aberto() || inventario.visor.aberto();
+const algoAberto = () => biblioteca.aberto() || telaPc.aberta() || telaTv.aberta() || projetor.apresentando() || busca.aberto() || inventario.aberto() || quadro.aberto() || mural.aberto() || mapa.aberto();
+const telaCheia = () => biblioteca.aberto() || telaPc.aberta() || telaTv.aberta() || busca.aberto() || quadro.aberto() || mural.aberto() || mapa.aberto() || inventario.visor.aberto();
 let quadroN = 0, sombraN = 0;
 const virarPara = (x, z, dt, vel = 10) => { let d = Math.atan2(x - eu.x, z - eu.z) - eu.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); eu.yaw += d * Math.min(1, dt * vel); return Math.abs(d); };
 camera.position.set(eu.x + Math.sin(cam.yaw) * cam.dist, 1.6, eu.z + Math.cos(cam.yaw) * cam.dist);
 window.quartoPato = pato;
-window.quarto = { pato, busca, abrirEntrada, cam, eu, gato, projetor, irAssistir, pedirPuxar, abrirCaixa, abrirBau, irAteCaixa, irAteBau, quadro, mural, mapa, inventario, sentar, levantar };     // para testar pelo console
+window.quarto = { biblioteca, abrirEstanteLivros, pato, busca, abrirEntrada, cam, eu, gato, projetor, irAssistir, pedirPuxar, abrirCaixa, abrirBau, irAteCaixa, irAteBau, quadro, mural, mapa, inventario, sentar, levantar };     // para testar pelo console
 atualizarBotoes(true);
 let ultimoDesenho = 0, ultimaEntrada = performance.now(), ocioso = false;
 for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel']) addEventListener(ev, () => { ultimaEntrada = performance.now(); }, { passive: true });
@@ -512,7 +520,7 @@ renderer.setAnimationLoop(() => {
   atualizarBotoes();
 
   // móveis que se mexem
-  estante.atualizar(dt); bau.atualizar(dt); projetor.atualizar(dt, brilho);
+  estante.atualizar(dt); bau.atualizar(dt); biblioteca.atualizar(dt); projetor.atualizar(dt, brilho);
 
   // lâmpada
   brilho += ((acesa ? 1 : 0) - brilho) * Math.min(1, dt * 18);
@@ -544,7 +552,7 @@ renderer.setAnimationLoop(() => {
   if (telaCheia()) return;                                   // tela cheia por cima: não precisa desenhar o quarto
   if (inventario.aberto() && quadroN % 3) return;            // inventário aberto: desenha o quarto mais devagar
   const aparelhos = pc.atualizar(dt) | tv.atualizar(dt) | telaTv.atualizar(dt, tv.ligado());
-  const mexendo = aparelhos || projetor.tocando() || eu.andando || pato.mexendo() || pux || ir || puxao > 0 || Math.abs(brilho - (acesa ? 1 : 0)) > 0.001 || gato.nivelSentado() % 1 !== 0 || estante.caixas.some((c) => c.a !== c.alvo);
+  const mexendo = aparelhos || projetor.tocando() || eu.andando || pato.mexendo() || biblioteca.mexendo() || pux || ir || puxao > 0 || Math.abs(brilho - (acesa ? 1 : 0)) > 0.001 || gato.nivelSentado() % 1 !== 0 || estante.caixas.some((c) => c.a !== c.alvo);
   if (mexendo) { sombraN = 0; if (quadroN % 2 === 0) renderer.shadowMap.needsUpdate = true; }
   else if (sombraN < 2) { sombraN++; renderer.shadowMap.needsUpdate = true; }
   ocioso = !mexendo && agora - ultimaEntrada > 2500 && !projetor.tocando();

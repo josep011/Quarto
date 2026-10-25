@@ -172,7 +172,7 @@ export function criarEstante({ colunas = 20, linhas = 7, nicho = 0.42, fundo = 0
 
 // ---------- estante de livros com laterais inclinadas (fica no chão) ----------
 // Origem: no chão, encostada na parede, no meio do comprimento. A frente olha para +x local.
-export function criarEstanteLivros() {
+export function criarEstanteLivros({ comLivros = true } = {}) {
   const L = 1.3, H = 0.8, DB = 0.42, DT = 0.2, E = 0.03;
   const g = new THREE.Group(), madeira = mat(0xffffff, { map: texVeio('#6e4126', 1, 1, 30), roughness: 0.55 });
   const forma = new THREE.Shape(); forma.moveTo(0, 0); forma.lineTo(DB, 0); forma.lineTo(DT, H); forma.lineTo(0, H); forma.closePath();
@@ -184,6 +184,12 @@ export function criarEstanteLivros() {
   // livros coloridos (em pé, inclinados e deitados)
   const cores = [0x7d2e2e, 0x2f4f6f, 0x4f6b3a, 0xc9a34a, 0x8c5a3c, 0x3d3d5c, 0xa04a2a, 0x2e6b6b, 0xd8cdb4, 0x5a2e4f];
   const livros = new THREE.Group(); g.add(livros);
+  // vãos das prateleiras (a biblioteca usa para pôr os livros de verdade)
+  const prateleiras = [{ y0: 0.06 + E / 2, maxH: 0.3, ini: -L / 2 + E + 0.02, fim: L / 2 - E - 0.25 }, { y0: 0.4 + E / 2, maxH: 0.3, ini: -L / 2 + E + 0.02, fim: L / 2 - E - 0.02 }];
+  if (!comLivros) {
+    for (let i = 0; i < 3; i++) { const b = bloco(livros, 0.17, 0.03, 0.2, 0.11, 0.06 + E / 2 + 0.015 + i * 0.031, L / 2 - E - 0.13, mat(cores[(i * 3 + 2) % cores.length], { roughness: 0.7 })); b.rotation.y = (rnd() - 0.5) * 0.2; b.castShadow = false; }
+    return { g, L, D: DB, prateleiras, prof };
+  }
   for (const [y0, maxH, ini, fim] of [[0.06 + E / 2, 0.3, -L / 2 + E + 0.02, L / 2 - E - 0.25], [0.4 + E / 2, 0.3, -L / 2 + E + 0.25, L / 2 - E - 0.02]]) {
     let z = ini;
     while (z < fim) {

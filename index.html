@@ -251,6 +251,29 @@
   #projetorUI .dica { margin: 0; font-size: 12px; color: var(--suave); }
   #projetorUI button { padding: 7px 11px; }
   @media (max-width: 420px) { #inventario { padding: 6px; } #inventario .janela { padding: 8px; } .ic { font-size: 8px; } .ic.arq, .ic.link { font-size: 7px; } }
+  /* ---------- estante de livros e leitor ---------- */
+  #listaLivros .rolar { flex: 1; overflow: auto; touch-action: pan-y; padding: 0 12px max(16px, env(safe-area-inset-bottom)); }
+  #listaLivros h3 { margin: 14px 4px 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+  #listaLivros .capas { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+  #listaLivros .livroBt { background: none; border: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+  #listaLivros .livroBt canvas { width: 100%; height: auto; border-radius: 2px 4px 4px 2px; box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  #listaLivros .livroBt span { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 1.25; }
+  #listaLivros .livroBt small { color: var(--suave); font-size: 11px; }
+  #leitor { z-index: 9; }
+  #leitor .area { background: #f6efdf; }
+  #leitor .pagina { position: absolute; inset: 0; overflow: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; padding: 20px max(18px, calc(50% - 340px)) 80px; color: #2d261d; font-family: Georgia, "Times New Roman", serif; line-height: 1.65; user-select: text; -webkit-user-select: text; }
+  #leitor .pagina p { margin: 0 0 .9em; text-align: justify; hyphens: auto; }
+  #leitor .pagina pre { margin: 0 0 1em; font: inherit; white-space: pre-wrap; }
+  #leitor .pagina .cab { text-align: center; font-weight: 700; letter-spacing: .04em; margin: 1.6em 0 1em; text-indent: 0; }
+  #leitor .capaLivro { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 8px 0 32px; }
+  #leitor .capaLivro canvas { position: static; inset: auto; cursor: default; width: min(240px, 60vw); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.35); border-radius: 2px 6px 6px 2px; }
+  #leitor .infoLivro { text-align: center !important; color: #5b4f3e; }
+  #leitor .sumario { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(320px, calc(100% - 16px)); overflow: auto; touch-action: pan-y; padding: 8px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
+  #leitor .sumario button { text-align: left; font-size: 13px; padding: 8px 10px; }
+  #leitor .sumario p { font-size: 14px; color: var(--suave); }
+  #leitor .barra { align-items: center; }
+  #leitor .progresso { flex: 1; max-width: 640px; accent-color: var(--destaque); }
+  #leitor .pct { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -311,6 +334,6 @@
     setTimeout(function () { var c = document.getElementById('carregando'); if (c && !c.classList.contains('fim') && !document.getElementById('erroCarregar')) { var p = document.createElement('p'); p.id = 'erroCarregar'; p.textContent = 'Está demorando… a internet pode estar lenta. Se não abrir, recarregue a página.'; c.firstElementChild.appendChild(p); } }, 30000);
   })();
 </script>
-<script type="module" src="./main.js?v=202610250300"></script>
+<script type="module" src="./main.js?v=202610251400"></script>
 </body>
 </html>
