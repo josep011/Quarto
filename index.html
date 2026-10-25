@@ -177,7 +177,7 @@
   #projetorUI button.on { background: var(--destaque); color: #2a2830; border-color: transparent; }
   #projetorUI .yt { display: flex; gap: 8px; }
   #projetorUI .yt input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--borda); background: rgba(255,255,255,.08); color: var(--texto); font: inherit; }
-  .ytTela { position: fixed; left: 0; top: 0; border: 0; background: #000; transform-origin: 0 0; pointer-events: none; z-index: 0; }
+  .ytTela { position: fixed; left: 0; top: 0; border: 0; background: #000; transform-origin: 0 0; pointer-events: none; }   /* fica ATRÁS do quarto, que tem um buraco transparente na parede */
   .ytTela.cheio { transform: none !important; width: 100vw; height: 100vh; height: 100dvh; opacity: 1 !important; pointer-events: auto; z-index: 15; }
   #ytFechar { position: fixed; z-index: 16; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); padding: 10px 14px; }
   #apresentacao { position: fixed; inset: 0; z-index: 6; touch-action: none; }
@@ -308,6 +308,6 @@
     setTimeout(function () { var c = document.getElementById('carregando'); if (c && !c.classList.contains('fim') && !document.getElementById('erroCarregar')) { var p = document.createElement('p'); p.id = 'erroCarregar'; p.textContent = 'Está demorando… a internet pode estar lenta. Se não abrir, recarregue a página.'; c.firstElementChild.appendChild(p); } }, 30000);
   })();
 </script>
-<script type="module" src="./main.js?v=202610250030"></script>
+<script type="module" src="./main.js?v=202610250120"></script>
 </body>
 </html>

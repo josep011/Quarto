@@ -10,7 +10,7 @@ import { criarInventario, criarMapaEstante } from './inventario.js';
 import { criarQuadro } from './quadro.js';
 import { criarMural } from './mural.js';
 import * as guarda from './guarda.js';
-import { criarProjetor } from './projetor.js?v=202610250030';
+import { criarProjetor } from './projetor.js?v=202610250120';
 import { criarComputador, criarTV } from './retro.js';
 import { criarTelaPc, criarTelaTv } from './telas.js';
 
@@ -25,7 +25,7 @@ let tAviso = null;
 function aviso(t) { const el = $('aviso'); el.textContent = t; el.hidden = false; clearTimeout(tAviso); tAviso = setTimeout(() => { el.hidden = true; }, 3800); }
 
 // ---------- cena ----------
-const renderer = new THREE.WebGLRenderer({ canvas: $('cena'), antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas: $('cena'), antialias: true, alpha: true });   // alpha: o quarto abre um "buraco" onde passa o YouTube
 const CELULAR = matchMedia('(pointer: coarse)').matches;
 // modo de desempenho: 'leve' (30 quadros, resolução menor, sem sombras) ou 'bonito'. No celular começa no leve.
 let modo = CELULAR ? 'leve' : 'bonito', sombras = modo === 'bonito';

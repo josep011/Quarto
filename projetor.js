@@ -3,8 +3,9 @@
 // acesa e viva com a luz apagada, tem o facho saindo da lente e ilumina quem passa na frente.
 // Modo apresentação: setas, teclado (e passador de slides), deslizar o dedo e anotações do apresentador.
 // O último arquivo projetado fica guardado no aparelho (nunca vai para o GitHub).
-// Links do YouTube: o vídeo do YouTube não pode virar textura 3D (o navegador não deixa), então o player oficial
-// fica por cima, deformado em perspectiva para coincidir com a imagem na parede. Precisa de internet.
+// Links do YouTube: o vídeo do YouTube não pode virar textura 3D (o navegador não deixa). Então o player oficial fica
+// ATRÁS do quarto, deformado em perspectiva, e a parede ganha um "buraco" transparente do tamanho da imagem: o que estiver
+// na frente (o gatinho, a cadeira) continua desenhado por cima, como numa projeção de verdade. Precisa de internet.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as guarda from './guarda.js';
@@ -63,12 +64,15 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
   const imagem = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), telaMat); imagem.position.set(tela.x, tela.y, tela.z + 0.004); imagem.renderOrder = 2; g.add(imagem);
   const fachoGeo = new THREE.BufferGeometry(); fachoGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12 * 3), 3));
   const fachoMat = new THREE.MeshBasicMaterial({ color: 0xfff4e0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  // o buraco: escreve transparente (alfa 0) no quadro, mas grava profundidade, então quem está na frente tapa o vídeo
+  const furoMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, blending: THREE.NoBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const furo = new THREE.Mesh(imagem.geometry, furoMat); furo.position.copy(imagem.position); furo.renderOrder = 1; furo.visible = false; g.add(furo);
   const facho = new THREE.Mesh(fachoGeo, fachoMat); facho.renderOrder = 3; facho.frustumCulled = false; g.add(facho);
   const spot = new THREE.SpotLight(0xfff4e6, 0, 0, 0.4, 0.5, 1.2); spot.position.copy(ponta); spot.target.position.set(tela.x, tela.y, tela.z); g.add(spot, spot.target);
   let largura = tela.w, altura = tela.h;
   function encaixar(ar) {
     if (ar > tela.w / tela.h) { largura = tela.w; altura = tela.w / ar; } else { altura = tela.h; largura = tela.h * ar; }
-    imagem.scale.set(largura, altura, 1);
+    imagem.scale.set(largura, altura, 1); furo.scale.copy(imagem.scale);
     const p = fachoGeo.attributes.position.array, cx = tela.x, cy = tela.y, z = tela.z + 0.01;
     const c = [[cx - largura / 2, cy - altura / 2], [cx + largura / 2, cy - altura / 2], [cx + largura / 2, cy + altura / 2], [cx - largura / 2, cy + altura / 2]];
     for (let i = 0; i < 4; i++) { const a = c[i], b = c[(i + 1) % 4]; p.set([ponta.x, ponta.y, ponta.z, a[0], a[1], z, b[0], b[1], z], i * 9); }
@@ -109,7 +113,7 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     el.src = `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&autoplay=${tocar ? 1 : 0}&start=${inicio | 0}&origin=${encodeURIComponent(location.origin)}`;
     el.addEventListener('load', () => { try { el.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch {} });
     el.style.visibility = 'hidden';
-    (document.getElementById('cena') || document.body.firstChild).after(el);  // logo depois do quarto: os botões ficam por cima
+    const quarto = document.getElementById('cena'); if (quarto) quarto.before(el); else document.body.prepend(el);  // antes do quarto: aparece pelo buraco
     yt = { el, id, estado: tocar ? 3 : -1, t: inicio | 0, dur: 0, mudo: false, cheio: false, ar };
   }
   function ytCheio(sim) {
@@ -350,7 +354,7 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
   const cantos = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   // coloca o player do YouTube exatamente sobre a imagem da parede (homografia: retângulo -> quadrilátero na tela)
   function posicionarYt(camera, oculto, brilhoSala) {
-    const el = yt.el;
+    const el = yt.el; furo.visible = false;
     if (yt.cheio) { el.style.visibility = 'visible'; return; }
     if (!camera || oculto || !ligado || k < 0.3) { el.style.visibility = 'hidden'; return; }
     const W = innerWidth, H = innerHeight, cx = tela.x, cy = tela.y, z = tela.z + 0.006, l = largura / 2, a = altura / 2;
@@ -368,8 +372,9 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     const A = x1 - x0 + g * x1, B = x3 - x0 + h * x3, D = y1 - y0 + g * y1, E = y3 - y0 + h * y3;
     const w = el.width, hh = el.height;
     el.style.transform = `matrix3d(${A / w},${D / w},0,${g / w},${B / hh},${E / hh},0,${h / hh},0,0,1,0,${x0},${y0},0,1)`;
-    el.style.opacity = (k * (0.8 + 0.2 * (1 - brilhoSala))).toFixed(3);
-    el.style.visibility = 'visible';
+    el.style.opacity = k.toFixed(3);
+    const lavado = 0.4 * brilhoSala; furoMat.opacity = lavado; furoMat.color.setRGB(0.8 * lavado, 0.77 * lavado, 0.72 * lavado);   // lâmpada acesa: imagem lavada, como no projetor
+    el.style.visibility = 'visible'; furo.visible = true;
   }
   function atualizar(dt, brilhoSala) {
     k += ((ligado ? 1 : 0) - k) * Math.min(1, dt * 4);
@@ -377,7 +382,7 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     telaMat.color.setScalar(0.95 * (ligado && k < 0.98 ? 0.85 + 0.15 * Math.random() : 1));
     fachoMat.opacity = k * (0.012 + 0.05 * (1 - brilhoSala));
     spot.intensity = k * 4; vidroLente.emissiveIntensity = k * 2.2; ledMat.color.setHex(ligado ? 0x37c45a : 0xd23b3b);
-    imagem.visible = facho.visible = k > 0.003;
+    imagem.visible = facho.visible = k > 0.003; if (furo.visible) imagem.visible = false;   // com o YouTube aparecendo, o cartaz some
     if (!ui.hidden && atual && atual.tipo === 'youtube' && yt) {
       if (!arrastandoBusca && yt.dur) busca.value = Math.round((yt.t / yt.dur) * 1000);
       $('.tempo').textContent = `${tempo(yt.t)} / ${tempo(yt.dur)}`;
@@ -387,7 +392,7 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     }
   }
   return { g, aparelho, imagem, atualizar, projetar, abrirPainel, painelAberto: () => !ui.hidden, ligado: () => ligado, tocando: () => ligado && (atual && atual.tipo === 'youtube' ? ytTocando() : !video.paused),
-    youtubeCheio: () => !!yt && yt.cheio, posicionarTela: (camera, oculto, brilhoSala) => { if (yt) posicionarYt(camera, oculto, brilhoSala); },
+    youtubeCheio: () => !!yt && yt.cheio, posicionarTela: (camera, oculto, brilhoSala) => { if (yt) posicionarYt(camera, oculto, brilhoSala); else furo.visible = false; },
     apresentando: () => apresentacao.aberta(), largura: () => largura,
     set aoAssistir(f) { aoAssistir = f; }, set aoApresentar(f) { aoApresentar = f; }, set aoMudarSlide(f) { aoMudarSlide = f; }, set aoLuz(f) { aoLuz = f; } };
 }
