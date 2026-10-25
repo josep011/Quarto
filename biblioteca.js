@@ -4,7 +4,6 @@
 // baixado quando você abre aquele livro.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LIVROS } from './livros/catalogo.js?v=202610251400';
 
 const AREAS = {
   br: { nome: 'Literatura brasileira', cores: ['#1f4d3a', '#2c5e3f', '#16403a', '#3b5a2a', '#24473f'] },
@@ -20,7 +19,6 @@ const hash = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const anoTxt = (a) => (a < 0 ? `${-a} a.C.` : String(a));
 
-for (const l of LIVROS) { const a = AREAS[l.area]; l.cor = a.cores[Math.floor(hash(l.id) * a.cores.length)]; }
 
 // ---------- capa (canvas 2D) ----------
 function ornamento(x, area, cx, cy, r) {
@@ -55,7 +53,8 @@ export function desenharCapa(livro, W = 360) {
 }
 
 // ---------- estante: lombadas num atlas + 1 malha ----------
-export function criarBiblioteca({ estante, aviso }) {
+export function criarBiblioteca({ estante, aviso, LIVROS }) {
+  for (const l of LIVROS) { const a = AREAS[l.area] || AREAS.mundo; l.cor = a.cores[Math.floor(hash(l.id) * a.cores.length)]; }
   const PX = 512 / 0.3;                              // pixels por metro na altura da lombada
   const itens = LIVROS.map((l) => {
     const h = hash(l.id + 'h');
@@ -216,7 +215,10 @@ export function criarBiblioteca({ estante, aviso }) {
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !tela.hidden) fechar(); });
 
   async function baixar(l) {
-    const r = await fetch(`./livros/${l.id}.txt.gz?v=1`); if (!r.ok) throw new Error('http ' + r.status);
+    // os livros ficam soltos na raiz do site (livro-<nome>.txt.gz); se estiverem numa pasta "livros", também acha
+    let r = await fetch(`./livro-${l.id}.txt.gz?v=1`).catch(() => null);
+    if (!r || !r.ok) r = await fetch(`./livros/${l.id}.txt.gz?v=1`).catch(() => null);
+    if (!r || !r.ok) throw new Error('faltou');
     const buf = await r.arrayBuffer(), u8 = new Uint8Array(buf);
     if (u8[0] === 0x1f && u8[1] === 0x8b) {              // .gz de verdade: descomprime aqui
       if (!('DecompressionStream' in window)) throw new Error('sem-descompressor');
@@ -237,7 +239,7 @@ export function criarBiblioteca({ estante, aviso }) {
       render(ini);
       if (ini > 0) aviso && aviso('Continuando de onde você parou.');
     } catch (e) {
-      pagina.querySelector('.infoLivro').textContent = String(e.message) === 'sem-descompressor' ? 'Este navegador é antigo demais para abrir o livro. Atualize o navegador.' : 'Não consegui abrir este livro. Confira se a pasta "livros" foi enviada para o GitHub, e a internet.';
+      pagina.querySelector('.infoLivro').textContent = String(e.message) === 'sem-descompressor' ? 'Este navegador é antigo demais para abrir o livro. Atualize o navegador.' : `Não consegui abrir este livro. Confira se o arquivo livro-${l.id}.txt.gz foi enviado para o GitHub (e a internet).`;
     }
   }
   function fechar() { tela.hidden = true; atual = null; pagina.innerHTML = ''; paras = []; devolver(false); aoFechar && aoFechar(); }

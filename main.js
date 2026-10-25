@@ -13,8 +13,6 @@ import * as guarda from './guarda.js';
 import { criarProjetor } from './projetor.js?v=202610250120';
 import { criarComputador, criarTV } from './retro.js';
 import { criarTelaPc, criarTelaTv } from './telas.js';
-import { criarPato } from './pato.js?v=202610250300';
-import { criarBiblioteca } from './biblioteca.js?v=202610251400';
 
 const MODELO = window.QUARTO_MODELO || './gatinho_terno_leve.glb?v=202610241300';      // cópia leve (~1 MB, menos triângulos) só do quarto
 const $ = (id) => document.getElementById(id);
@@ -107,11 +105,16 @@ const estante = criarEstante({ colunas: COL, linhas: LIN }); estante.g.position.
 bloquear(x0, z1 - estante.fundo - 0.02, x1, z1);
 const caixaPorId = new Map(estante.caixas.map((c) => [c.id, c]));
 
-const livros = criarEstanteLivros({ comLivros: false }), LIV = { z: -0.6 };
+// extras opcionais: se algum arquivo deles faltar no site, o quarto abre do mesmo jeito (só sem aquele extra)
+const opcional = async (...urls) => { for (const u of urls) { try { return await import(u); } catch (e) { console.warn('não carregou', u, e); } } return null; };
+const [modBib, modCat] = await Promise.all([opcional('./biblioteca.js?v=202610251500'), opcional('./livros-catalogo.js?v=202610251500', './livros/catalogo.js?v=202610251500')]);
+const temLivros = !!(modBib && modCat && modCat.LIVROS);
+const livros = criarEstanteLivros({ comLivros: !temLivros }), LIV = { z: -0.6 };
 livros.g.position.set(x1, 0, LIV.z); livros.g.rotation.y = Math.PI; cena.add(livros.g);
 bloquear(x1 - livros.D, LIV.z - livros.L / 2, x1, LIV.z + livros.L / 2);
 // os livros da estante: clássicos em domínio público, com capa, que dá para puxar e ler
-const biblioteca = criarBiblioteca({ estante: livros, aviso });
+const biblioteca = temLivros ? modBib.criarBiblioteca({ estante: livros, aviso, LIVROS: modCat.LIVROS })
+  : { malha: null, livros: [], abrirLista: () => aviso('Os livros não carregaram: faltam os arquivos biblioteca.js e livros-catalogo.js no site.'), abrirLivro: () => {}, atualizar: () => false, indiceDoToque: () => 0, aberto: () => false, mexendo: () => false };
 const bau = criarBau(), BAU = { z: LIV.z + livros.L / 2 + 0.18 + bau.L / 2 };      // à direita de quem olha para os livros
 bau.g.position.set(x1, 0, BAU.z); bau.g.rotation.y = Math.PI; cena.add(bau.g);
 bloquear(x1 - bau.D - 0.02, BAU.z - bau.L / 2, x1, BAU.z + bau.L / 2);
@@ -241,11 +244,14 @@ const hipAlt = perna ? perna.getWorldPosition(vq).y : 0.26;
 }
 
 // ---------- o Microduck (bichinho do quarto) ----------
-const pato = await criarPato(cena, {
+const modPato = await opcional('./pato.js?v=202610251500');
+const patoNulo = { grupo: new THREE.Group(), pos: () => ({ x: 1e4, z: 1e4, yaw: 0 }), atualizar() {}, reagir() {}, chamar() {}, esperar() {}, receberCarinho() {}, brincar() {}, comida() {}, sombra() {},
+  fazer: { quack() {}, dormir() {}, acordar() {} }, dormindo: () => false, mexendo: () => false };
+const pato = !modPato ? patoNulo : await modPato.criarPato(cena, {
   escala: 2.6, inicio: { x: -0.7, z: 2.0, yaw: 2.6 }, empurrar, livre, limites: QUARTO,
   gato: () => ({ x: eu.x, z: eu.z, yaw: eu.yaw, andando: eu.andando, sentado: eu.sentado, humor: humorAtual }),
   luzAcesa: () => acesa,
-});
+}).catch((e) => { console.warn('o pato não carregou', e); return patoNulo; });
 const distPato = () => { const d = pato.pos(); return Math.hypot(eu.x - d.x, eu.z - d.z); };
 // o gatinho vai até o pato (para a uma certa distância, de frente para ele) e depois faz algo
 function irAtePato(dist, depois) {
