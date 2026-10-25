@@ -3,6 +3,8 @@
 // acesa e viva com a luz apagada, tem o facho saindo da lente e ilumina quem passa na frente.
 // Modo apresentação: setas, teclado (e passador de slides), deslizar o dedo e anotações do apresentador.
 // O último arquivo projetado fica guardado no aparelho (nunca vai para o GitHub).
+// Links do YouTube: o vídeo do YouTube não pode virar textura 3D (o navegador não deixa), então o player oficial
+// fica por cima, deformado em perspectiva para coincidir com a imagem na parede. Precisa de internet.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as guarda from './guarda.js';
@@ -19,6 +21,21 @@ export const tipoProjetavel = (mime = '', nome = '') => {
   if (/^audio\//.test(mime) || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(nome)) return 'audio';
   return null;
 };
+// aceita youtube.com/watch?v=, youtu.be/, /shorts/, /embed/, /live/, m. e music., com ou sem https e com ?t=
+export function idYoutube(txt = '') {
+  const s = String(txt).trim(); if (/^[\w-]{11}$/.test(s)) return { id: s, inicio: 0, vertical: false };
+  let u; try { u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s); } catch { return null; }
+  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, ''); let id = null, vertical = false;
+  if (host === 'youtu.be') id = u.pathname.slice(1, 12);
+  else if (/^youtube(-nocookie)?\.com$/.test(host)) {
+    id = u.searchParams.get('v');
+    const m = u.pathname.match(/^\/(shorts|embed|live|v)\/([\w-]{11})/); if (m) { id = m[2]; vertical = m[1] === 'shorts'; }
+  }
+  if (!id || !/^[\w-]{11}$/.test(id)) return null;
+  const t = u.searchParams.get('t') || u.searchParams.get('start') || ''; let inicio = 0;
+  const mm = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/); if (mm) inicio = (+mm[1] || 0) * 3600 + (+mm[2] || 0) * 60 + (+mm[3] || 0);
+  return { id, inicio, vertical };
+}
 const naoAbre = (nome = '') => (/\.(ppt|pps|odp|key)$/i.test(nome) ? 'Esse formato de apresentação não abre aqui. No programa da apresentação, use "Salvar como" PowerPoint (.pptx) ou PDF.' : null);
 
 // tela da parede: { x, y, z, w, h } (z = parede, a imagem olha para +z) ; lente: { x, y, z, alturaTeto }
@@ -70,12 +87,58 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '40px system-ui, sans-serif'; let t = nome; while (x.measureText(t).width > 1100 && t.length > 3) t = t.slice(0, -2); x.fillText(t === nome ? t : t + '…', 640, 450);
   });
 
+  const telaYt = cartaz((x) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, 1280, 720); x.fillStyle = '#e33'; x.beginPath(); x.roundRect(560, 300, 160, 112, 28); x.fill();
+    x.fillStyle = '#fff'; x.beginPath(); x.moveTo(620, 330); x.lineTo(620, 382); x.lineTo(668, 356); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(255,255,255,.6)'; x.textAlign = 'center'; x.font = '32px system-ui, sans-serif'; x.fillText('YouTube (precisa de internet)', 640, 480);
+  });
+
+  // ---------- YouTube: o player oficial por cima da imagem na parede ----------
+  let yt = null;                                        // { el, id, estado, t, dur, mudo, cheio, ar }
+  const fecharCheio = document.createElement('button'); fecharCheio.id = 'ytFechar'; fecharCheio.className = 'vidro'; fecharCheio.textContent = 'Voltar ao quarto'; fecharCheio.hidden = true;
+  fecharCheio.addEventListener('click', () => ytCheio(false)); document.body.append(fecharCheio);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && yt && yt.cheio) { e.stopImmediatePropagation(); ytCheio(false); } }, true);
+  const ytEnviar = (func, args = []) => { try { yt?.el.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*'); } catch {} };
+  const ytTocando = () => !!yt && (yt.estado === 1 || yt.estado === 3);
+  function ytSoltar() { if (!yt) return; yt.el.remove(); yt = null; ytCheio(false); }
+  function ytMontar(id, inicio, tocar, ar) {
+    ytSoltar();
+    const el = document.createElement('iframe'); el.className = 'ytTela'; el.title = 'YouTube';
+    el.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; el.allowFullscreen = true; el.referrerPolicy = 'strict-origin-when-cross-origin';
+    const lado = 720; el.width = ar >= 1 ? lado : Math.round(lado * ar); el.height = ar >= 1 ? Math.round(lado / ar) : lado;
+    el.src = `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&autoplay=${tocar ? 1 : 0}&start=${inicio | 0}&origin=${encodeURIComponent(location.origin)}`;
+    el.addEventListener('load', () => { try { el.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch {} });
+    el.style.visibility = 'hidden';
+    (document.getElementById('cena') || document.body.firstChild).after(el);  // logo depois do quarto: os botões ficam por cima
+    yt = { el, id, estado: tocar ? 3 : -1, t: inicio | 0, dur: 0, mudo: false, cheio: false, ar };
+  }
+  function ytCheio(sim) {
+    if (!yt) sim = false; if (yt) { yt.cheio = sim; yt.el.classList.toggle('cheio', sim); }
+    fecharCheio.hidden = !sim; if (sim) ui.hidden = true;
+  }
+  addEventListener('message', (e) => {
+    if (!yt || e.source !== yt.el.contentWindow) return;
+    let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+    if (!d || !d.event) return; const antes = yt.estado;
+    if (d.event === 'onReady') ytEnviar('setVolume', [Math.round(video.volume * 100)]);
+    else if (d.event === 'onStateChange') yt.estado = d.info;
+    else if (d.event === 'onError') { aviso && aviso('Esse vídeo do YouTube não deixa ser passado fora do site deles (ou foi removido). Tente outro link.'); yt.estado = -1; }
+    else if (d.event === 'infoDelivery' || d.event === 'initialDelivery') {
+      const i = d.info || {};
+      if (i.playerState != null) yt.estado = i.playerState; if (i.currentTime != null) yt.t = i.currentTime;
+      if (i.duration) yt.dur = i.duration; if (i.muted != null) yt.mudo = i.muted;
+      const titulo = i.videoData && i.videoData.title;
+      if (titulo && atual && atual.tipo === 'youtube' && atual.nome !== titulo) { atual.nome = titulo; guardarEstado(); painel(); }
+    }
+    if (yt.estado !== antes) painel();
+  });
+
   // ---------- reprodução ----------
   const video = document.createElement('video'); video.playsInline = true; video.preload = 'auto'; video.setAttribute('webkit-playsinline', '');
   let ligado = false, atual = null, url = null, textura = null, k = 0, slides = null, n = 1, gerando = 0;
   function trocarTextura(t) { if (textura && textura !== espera && textura !== t) textura.dispose(); textura = t; telaMat.map = t; telaMat.needsUpdate = true; }
   function soltar() {
-    video.pause(); video.removeAttribute('src'); video.load();
+    video.pause(); video.removeAttribute('src'); video.load(); ytSoltar();
     if (url) URL.revokeObjectURL(url); url = null; if (slides && slides.fechar) slides.fechar(); slides = null;
   }
   // ---------- apresentações: PDF, PowerPoint ou várias imagens viram "slides" ----------
@@ -110,6 +173,12 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
 
   async function carregar(arq, { tocar = true, paginaInicial = 1 } = {}) {
     soltar(); cacheSlides.clear();
+    if (arq.youtube) {
+      const ar = arq.vertical ? 9 / 16 : 16 / 9;
+      atual = { ...arq, tipo: 'youtube', pagina: 1 }; trocarTextura(telaYt); encaixar(ar);
+      if (ligado) ytMontar(arq.youtube, arq.inicio || 0, tocar, ar);
+      painel(); return true;
+    }
     const lista = arq.blobs || null, tipo = lista ? 'imagens' : tipoProjetavel(arq.mime, arq.nome);
     if (!tipo) { aviso && aviso(naoAbre(arq.nome) || 'O projetor passa vídeo, imagem, apresentação (PowerPoint ou PDF) e áudio. Esse arquivo não dá.'); return false; }
     atual = { ...arq, tipo, pagina: paginaInicial };
@@ -135,7 +204,7 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     painel(); return true;
   }
   async function guardarEstado() {
-    try { await guarda.salvarExtra({ id: 'projetor', blob: atual && !atual.blobs ? atual.blob : null, blobs: atual?.blobs || null, nome: atual?.nome || '', mime: atual?.mime || '', pagina: atual?.pagina || 1, ligado, em: Date.now() }); }
+    try { await guarda.salvarExtra({ id: 'projetor', youtube: atual?.youtube || null, inicio: yt ? Math.floor(yt.t) : atual?.inicio || 0, vertical: !!atual?.vertical, blob: atual && !atual.blobs ? atual.blob : null, blobs: atual?.blobs || null, nome: atual?.nome || '', mime: atual?.mime || '', pagina: atual?.pagina || 1, ligado, em: Date.now() }); }
     catch { aviso && aviso('O arquivo é grande demais para guardar no aparelho. Ele projeta agora, mas não fica salvo.'); }
   }
   async function projetar(arq) {
@@ -143,13 +212,24 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     const ok = await carregar(arq.blobs ? { nome: arq.nome, blobs: arq.blobs } : { nome: arq.nome, mime: arq.mime || arq.blob.type || '', blob: arq.blob });
     if (ok) { guardarEstado(); abrirPainel(); }
   }
-  function ligar(sim) { ligado = sim; if (!sim) video.pause(); if (sim && !atual) trocarTextura(espera); guardarEstado(); painel(); }
+  function ligar(sim) {
+    ligado = sim; if (!sim) { video.pause(); ytEnviar('pauseVideo'); ytCheio(false); }
+    if (sim && !atual) trocarTextura(espera);
+    if (sim && atual && atual.tipo === 'youtube' && !yt) ytMontar(atual.youtube, atual.inicio || 0, false, atual.vertical ? 9 / 16 : 16 / 9);
+    guardarEstado(); painel();
+  }
+  function passarYoutube(txt) {
+    const v = idYoutube(txt);
+    if (!v) { aviso && aviso('Esse link não parece ser de um vídeo do YouTube. Copie o link pelo botão Compartilhar do vídeo.'); return; }
+    ligado = true; carregar({ nome: 'Vídeo do YouTube', youtube: v.id, inicio: v.inicio, vertical: v.vertical }, { tocar: true }).then(() => { guardarEstado(); painel(); });
+  }
   (async () => {
     try {
       const r = await guarda.extra('projetor');
-      if (r && (r.blob || (r.blobs && r.blobs.length))) await carregar(r.blobs ? { nome: r.nome, blobs: r.blobs } : { nome: r.nome, mime: r.mime, blob: r.blob }, { tocar: false, paginaInicial: r.pagina || 1 });
+      if (r && r.youtube) await carregar({ nome: r.nome || 'Vídeo do YouTube', youtube: r.youtube, inicio: r.inicio || 0, vertical: !!r.vertical }, { tocar: false });
+      else if (r && (r.blob || (r.blobs && r.blobs.length))) await carregar(r.blobs ? { nome: r.nome, blobs: r.blobs } : { nome: r.nome, mime: r.mime, blob: r.blob }, { tocar: false, paginaInicial: r.pagina || 1 });
       else trocarTextura(espera);
-      if (r && r.ligado) ligado = true;
+      if (r && r.ligado) { ligado = true; if (atual && atual.tipo === 'youtube') ytMontar(atual.youtube, atual.inicio || 0, false, atual.vertical ? 9 / 16 : 16 / 9); }
     } catch { trocarTextura(espera); }
     painel();
   })();
@@ -159,9 +239,10 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
   ui.innerHTML = `<div class="cab"><b>Projetor</b><button data-a="ligar"></button><button data-a="fechar" aria-label="Fechar">✕</button></div>
     <p class="arquivo"></p>
     <div class="midia"><button data-a="play" class="forte"></button><input type="range" class="busca" min="0" max="1000" value="0" aria-label="Posição"><span class="tempo"></span></div>
-    <div class="midia2"><button data-a="som"></button><input type="range" class="volume" min="0" max="100" value="80" aria-label="Volume"><button data-a="repetir">Repetir</button><button data-a="voltar10">−10 s</button><button data-a="avancar10">+10 s</button></div>
+    <div class="midia2"><button data-a="som"></button><input type="range" class="volume" min="0" max="100" value="80" aria-label="Volume"><button data-a="repetir">Repetir</button><button data-a="voltar10">−10 s</button><button data-a="avancar10">+10 s</button><button data-a="cheio">Tela cheia</button></div>
     <div class="paginas"><button data-a="ant" aria-label="Slide anterior">‹ Voltar</button><span class="pag"></span><button data-a="prox" aria-label="Próximo slide">Avançar ›</button><button data-a="apresentar" class="forte">Apresentar</button></div>
     <div class="linha"><button data-a="escolher" class="forte">Escolher arquivo</button><button data-a="assistir">Assistir</button><button data-a="tirar">Tirar arquivo</button></div>
+    <div class="yt"><input type="url" inputmode="url" placeholder="Cole aqui um link do YouTube" aria-label="Link do YouTube"><button data-a="yt" class="forte">Passar</button></div>
     <p class="dica">Vídeo, imagem, áudio ou apresentação: PowerPoint (.pptx), PDF ou várias imagens de uma vez. Também dá para abrir uma caixa e tocar em <b>Projetar</b>.</p>
     <input type="file" multiple accept="video/*,image/*,audio/*,application/pdf,.pdf,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.ppt,.odp,.key" hidden>`;
   document.body.append(ui);
@@ -172,10 +253,11 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
   function painel() {
     $('[data-a=ligar]').textContent = ligado ? 'Desligar' : 'Ligar'; $('[data-a=ligar]').className = ligado ? '' : 'forte';
     $('.arquivo').innerHTML = atual ? `<b>${esc(atual.nome)}</b>` : 'Nenhum arquivo no projetor.';
-    const midia = atual && (atual.tipo === 'video' || atual.tipo === 'audio');
+    const ehYt = atual && atual.tipo === 'youtube', midia = atual && (atual.tipo === 'video' || atual.tipo === 'audio' || ehYt);
     $('.midia').hidden = $('.midia2').hidden = !midia; $('.paginas').hidden = !slides;
-    $('[data-a=play]').textContent = video.paused ? 'Tocar' : 'Pausar';
-    $('[data-a=som]').textContent = video.muted ? 'Ligar som' : 'Sem som';
+    $('[data-a=play]').textContent = (ehYt ? !ytTocando() : video.paused) ? 'Tocar' : 'Pausar';
+    $('[data-a=som]').textContent = (ehYt ? yt?.mudo : video.muted) ? 'Ligar som' : 'Sem som';
+    $('[data-a=repetir]').hidden = !!ehYt; $('[data-a=cheio]').hidden = !ehYt;
     $('[data-a=repetir]').classList.toggle('on', video.loop);
     if (slides) $('.pag').textContent = `${n} / ${slides.total}`;
     $('[data-a=tirar]').hidden = !atual; $('[data-a=assistir]').hidden = !atual || !!slides;
@@ -185,6 +267,14 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     if (a === 'fechar') ui.hidden = true;
     else if (a === 'ligar') ligar(!ligado);
     else if (a === 'escolher') arqEl.click();
+    else if (a === 'yt') { const c = $('.yt input'); passarYoutube(c.value); c.value = ''; }
+    else if (a === 'cheio') { if (!ligado) ligar(true); ytCheio(true); }
+    else if (atual && atual.tipo === 'youtube' && ['play', 'som', 'voltar10', 'avancar10'].includes(a)) {
+      if (!ligado) ligar(true);
+      if (a === 'play') { if (ytTocando()) { ytEnviar('pauseVideo'); yt.estado = 2; } else { ytEnviar('playVideo'); if (yt) yt.estado = 3; } }
+      else if (a === 'som') { ytEnviar(yt?.mudo ? 'unMute' : 'mute'); if (yt) yt.mudo = !yt.mudo; }
+      else if (yt) { const t = Math.max(0, yt.t + (a === 'voltar10' ? -10 : 10)); ytEnviar('seekTo', [t, true]); yt.t = t; }
+    }
     else if (a === 'play') { if (!ligado) ligar(true); if (video.paused) video.play().catch(() => {}); else video.pause(); }
     else if (a === 'som') video.muted = !video.muted;
     else if (a === 'repetir') video.loop = !video.loop;
@@ -193,7 +283,8 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     else if (a === 'ant') irSlide(n - 1);
     else if (a === 'prox') irSlide(n + 1);
     else if (a === 'apresentar') apresentacao.abrir();
-    else if (a === 'assistir') { if (!ligado) ligar(true); if (atual && atual.tipo !== 'imagem' && video.paused) video.play().catch(() => {}); aoAssistir && aoAssistir(); }
+    else if (a === 'assistir') { if (!ligado) ligar(true); if (atual && atual.tipo === 'youtube') { if (!ytTocando()) { ytEnviar('playVideo'); if (yt) yt.estado = 3; } aoAssistir && aoAssistir(); }
+      else if (atual && atual.tipo !== 'imagem' && video.paused) video.play().catch(() => {}); aoAssistir && aoAssistir(); }
     else if (a === 'tirar') { soltar(); atual = null; trocarTextura(espera); encaixar(16 / 9); guardarEstado(); }
     painel();
   });
@@ -205,11 +296,12 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
       projetar({ nome: `${imgs.length} imagens`, blobs: imgs });
     } else projetar({ nome: files[0].name, mime: files[0].type, blob: files[0] });
   }
+  $('.yt input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); passarYoutube(e.target.value); e.target.value = ''; } });
   arqEl.addEventListener('change', () => { const f = [...arqEl.files]; arqEl.value = ''; deArquivos(f); });
   const busca = $('.busca');
-  busca.addEventListener('input', () => { arrastandoBusca = true; if (video.duration) video.currentTime = (busca.value / 1000) * video.duration; });
+  busca.addEventListener('input', () => { arrastandoBusca = true; if (atual && atual.tipo === 'youtube') { if (yt && yt.dur) { yt.t = (busca.value / 1000) * yt.dur; ytEnviar('seekTo', [yt.t, true]); } return; } if (video.duration) video.currentTime = (busca.value / 1000) * video.duration; });
   busca.addEventListener('change', () => { arrastandoBusca = false; });
-  $('.volume').addEventListener('input', (e) => { video.volume = e.target.value / 100; video.muted = false; painel(); });
+  $('.volume').addEventListener('input', (e) => { video.volume = e.target.value / 100; video.muted = false; ytEnviar('setVolume', [+e.target.value]); if (yt && yt.mudo) { ytEnviar('unMute'); yt.mudo = false; } painel(); });
   for (const ev of ['play', 'pause', 'ended', 'volumechange']) video.addEventListener(ev, painel);
   ui.addEventListener('dragover', (e) => e.preventDefault());
   ui.addEventListener('drop', (e) => { e.preventDefault(); deArquivos([...(e.dataTransfer?.files || [])]); });
@@ -255,6 +347,30 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
   })();
 
   // ---------- a cada quadro ----------
+  const cantos = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  // coloca o player do YouTube exatamente sobre a imagem da parede (homografia: retângulo -> quadrilátero na tela)
+  function posicionarYt(camera, oculto, brilhoSala) {
+    const el = yt.el;
+    if (yt.cheio) { el.style.visibility = 'visible'; return; }
+    if (!camera || oculto || !ligado || k < 0.3) { el.style.visibility = 'hidden'; return; }
+    const W = innerWidth, H = innerHeight, cx = tela.x, cy = tela.y, z = tela.z + 0.006, l = largura / 2, a = altura / 2;
+    cantos[0].set(cx - l, cy + a, z); cantos[1].set(cx + l, cy + a, z); cantos[2].set(cx + l, cy - a, z); cantos[3].set(cx - l, cy - a, z);
+    const P = [];
+    for (const c of cantos) {
+      if (camera.position.z <= z) { el.style.visibility = 'hidden'; return; }
+      c.project(camera); if (c.z > 1 || c.z < -1) { el.style.visibility = 'hidden'; return; }
+      P.push([(c.x + 1) / 2 * W, (1 - c.y) / 2 * H]);
+    }
+    const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = P;
+    const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+    const den = dx1 * dy2 - dx2 * dy1; if (Math.abs(den) < 1e-9) { el.style.visibility = 'hidden'; return; }
+    const g = (dx3 * dy2 - dx2 * dy3) / den, h = (dx1 * dy3 - dx3 * dy1) / den;
+    const A = x1 - x0 + g * x1, B = x3 - x0 + h * x3, D = y1 - y0 + g * y1, E = y3 - y0 + h * y3;
+    const w = el.width, hh = el.height;
+    el.style.transform = `matrix3d(${A / w},${D / w},0,${g / w},${B / hh},${E / hh},0,${h / hh},0,0,1,0,${x0},${y0},0,1)`;
+    el.style.opacity = (k * (0.8 + 0.2 * (1 - brilhoSala))).toFixed(3);
+    el.style.visibility = 'visible';
+  }
   function atualizar(dt, brilhoSala) {
     k += ((ligado ? 1 : 0) - k) * Math.min(1, dt * 4);
     telaMat.opacity = k * (0.5 + 0.5 * (1 - brilhoSala));          // com a lâmpada acesa a imagem fica lavada
@@ -262,12 +378,16 @@ export function criarProjetor(cena, { tela, lente, aviso }) {
     fachoMat.opacity = k * (0.012 + 0.05 * (1 - brilhoSala));
     spot.intensity = k * 4; vidroLente.emissiveIntensity = k * 2.2; ledMat.color.setHex(ligado ? 0x37c45a : 0xd23b3b);
     imagem.visible = facho.visible = k > 0.003;
-    if (!ui.hidden && atual && (atual.tipo === 'video' || atual.tipo === 'audio')) {
+    if (!ui.hidden && atual && atual.tipo === 'youtube' && yt) {
+      if (!arrastandoBusca && yt.dur) busca.value = Math.round((yt.t / yt.dur) * 1000);
+      $('.tempo').textContent = `${tempo(yt.t)} / ${tempo(yt.dur)}`;
+    } else if (!ui.hidden && atual && (atual.tipo === 'video' || atual.tipo === 'audio')) {
       if (!arrastandoBusca && video.duration) busca.value = Math.round((video.currentTime / video.duration) * 1000);
       $('.tempo').textContent = `${tempo(video.currentTime)} / ${tempo(video.duration)}`;
     }
   }
-  return { g, aparelho, imagem, atualizar, projetar, abrirPainel, painelAberto: () => !ui.hidden, ligado: () => ligado, tocando: () => ligado && !video.paused,
+  return { g, aparelho, imagem, atualizar, projetar, abrirPainel, painelAberto: () => !ui.hidden, ligado: () => ligado, tocando: () => ligado && (atual && atual.tipo === 'youtube' ? ytTocando() : !video.paused),
+    youtubeCheio: () => !!yt && yt.cheio, posicionarTela: (camera, oculto, brilhoSala) => { if (yt) posicionarYt(camera, oculto, brilhoSala); },
     apresentando: () => apresentacao.aberta(), largura: () => largura,
     set aoAssistir(f) { aoAssistir = f; }, set aoApresentar(f) { aoApresentar = f; }, set aoMudarSlide(f) { aoMudarSlide = f; }, set aoLuz(f) { aoLuz = f; } };
 }

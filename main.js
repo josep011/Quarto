@@ -10,7 +10,7 @@ import { criarInventario, criarMapaEstante } from './inventario.js';
 import { criarQuadro } from './quadro.js';
 import { criarMural } from './mural.js';
 import * as guarda from './guarda.js';
-import { criarProjetor } from './projetor.js';
+import { criarProjetor } from './projetor.js?v=202610250030';
 import { criarComputador, criarTV } from './retro.js';
 import { criarTelaPc, criarTelaTv } from './telas.js';
 
@@ -499,6 +499,7 @@ renderer.setAnimationLoop(() => {
   desejada.x = Math.max(x0 + 0.15, Math.min(x1 - 0.15, desejada.x)); desejada.z = Math.max(z0 + 0.15, Math.min(z1 - estante.fundo - 0.12, desejada.z));
   desejada.y = Math.max(0.25, Math.min(h - 0.2, desejada.y));
   camera.position.lerp(desejada, 1 - Math.exp(-12 * dt)); camera.lookAt(olhar);
+  camera.updateMatrixWorld(); projetor.posicionarTela(camera, telaCheia() || inventario.aberto() || projetor.apresentando(), brilho);   // player do YouTube colado na parede
   quadroN++;
   if (telaCheia()) return;                                   // tela cheia por cima: não precisa desenhar o quarto
   if (inventario.aberto() && quadroN % 3) return;            // inventário aberto: desenha o quarto mais devagar
