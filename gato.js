@@ -194,6 +194,12 @@ export function criarGato(gltf, { humorInicial = 'normal' } = {}) {
     carinho_ele: { dur: 3.4, f: (p, t) => { const e = env(p, 0.15), pat = 0.5 + 0.5 * Math.sin(t * 7);
       return { tr: [0.08 * e, 0, 0], cab: [0.18 * e, 0, 0.14 * e], bD: [-2.25 * e, 0, -0.25 * e], aD: [(-0.35 - 0.45 * pat) * e, 0, -0.1 * e],
         bE: [0.45 * e, 0, 0.08 * e], aE: [-0.6 * e, 0, 0.2 * e] }; } },
+    // com o Microduck: agacha e faz carinho na cabeça dele (lá embaixo), e joga migalhas
+    fazer_carinho_pato: { dur: 3.0, f: (p, t) => { const e = env(p, 0.18), pat = 0.5 + 0.5 * Math.sin(t * 7);
+      return junta(agacha(0.95 * e), { tr: [0.32 * e, 0, 0], cab: [0.3 * e, 0, 0.12 * e], bD: [-1.05 * e, 0, -0.18 * e], aD: [(-0.15 - 0.4 * pat) * e, 0, -0.08 * e],
+        bE: [0.3 * e, 0, 0.12 * e], aE: [-0.5 * e, 0, 0.2 * e], oE: [0, 0, 0.12 * e], oD: [0, 0, -0.12 * e] }); } },
+    jogar_comida: { dur: 1.5, f: (p, t) => { const e = env(p, 0.2), s = p < 0.45 ? -sm(p / 0.45) : -1 + 2.2 * sm((p - 0.45) / 0.25);
+      return junta(agacha(0.35 * e), { tr: [0.12 * e, 0, 0], cab: [0.18 * e, 0, 0], bD: [(-0.9 * Math.max(0, s) + 0.5 * Math.max(0, -s)) * e, 0, -0.15 * e], aD: [-0.3 * e, 0, 0] }); } },
     receber_carinho_ela: { dur: 3.4, f: (p, t) => { const e = env(p, 0.15), w = Math.sin(t * 3.2);
       return { y: 0.0008 * e, tr: [0, 0.1 * w * e, 0], cab: [0.16 * e, 0.08 * w * e, (0.22 + 0.06 * w) * e], oE: [0, 0, 0.32 * e], oD: [0, 0, -0.32 * e],
         bE: [-0.85 * e, 0, 0.55 * e], bD: [-0.85 * e, 0, -0.55 * e], aE: [-1.5 * e, 0, 0.3 * e], aD: [-1.5 * e, 0, -0.3 * e],

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { criarGato } from './gato.js?v=202610241330';
+import { criarGato } from './gato.js?v=202610250300';
 import { texLadrilho, criarMesa, criarNichos, criarCadeira, criarEstante, criarEstanteLivros, criarBau, criarQuadroBranco, criarBandeja } from './moveis.js';
 import { criarBusca } from './busca.js';
 import { criarInventario, criarMapaEstante } from './inventario.js';
@@ -13,11 +13,12 @@ import * as guarda from './guarda.js';
 import { criarProjetor } from './projetor.js?v=202610250120';
 import { criarComputador, criarTV } from './retro.js';
 import { criarTelaPc, criarTelaTv } from './telas.js';
+import { criarPato } from './pato.js?v=202610250300';
 
 const MODELO = window.QUARTO_MODELO || './gatinho_terno_leve.glb?v=202610241300';      // cópia leve (~1 MB, menos triângulos) só do quarto
 const $ = (id) => document.getElementById(id);
 const QUARTO = { x0: -4.25, x1: 4.25, z0: -4.25, z1: 4.25, h: 3.2 };   // 8,5 m x 8,5 m, pé-direito de 3,2 m
-const RAIO = 0.38, VELOCIDADE = 2.2;
+const RAIO_GATO = 0.38, VELOCIDADE = 2.2;
 const LAMPADA = { x: 0, z: 0 };
 
 // ---------- avisos rápidos ----------
@@ -66,7 +67,7 @@ for (const [a, b, c, d] of [[x0, z0, x1, z0 + 0.03], [x0, z1 - 0.03, x1, z1], [x
 // ---------- colisões ----------
 const colisores = [];
 const bloquear = (ax, az, bx, bz) => colisores.push({ x0: Math.min(ax, bx), z0: Math.min(az, bz), x1: Math.max(ax, bx), z1: Math.max(az, bz) });
-function empurrar(p) {
+function empurrar(p, RAIO = RAIO_GATO) {
   for (let it = 0; it < 2; it++) for (const c of colisores) {
     const cx = Math.max(c.x0, Math.min(p.x, c.x1)), cz = Math.max(c.z0, Math.min(p.z, c.z1));
     const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
@@ -76,6 +77,12 @@ function empurrar(p) {
     else { const d = Math.sqrt(d2), k = (RAIO - d) / d; p.x += dx * k; p.z += dz * k; }
   }
   p.x = Math.max(x0 + RAIO, Math.min(x1 - RAIO, p.x)); p.z = Math.max(z0 + RAIO, Math.min(z1 - RAIO, p.z));
+}
+
+// dá para ficar em (x, z) com folga de r? (usado pelo pato para escolher aonde ir)
+function livre(x, z, r = 0.45) {
+  if (x < x0 + r || x > x1 - r || z < z0 + r || z > z1 - r) return false;
+  return !colisores.some((c) => x > c.x0 - r && x < c.x1 + r && z > c.z0 - r && z < c.z1 + r);
 }
 
 // ---------- móveis (posições combinadas no PDF) ----------
@@ -138,7 +145,7 @@ const alvoCorda = add(new THREE.CylinderGeometry(0.12, 0.12, COMP + 0.3, 8), new
 const luz = new THREE.PointLight(0xfff3e0, 0, 0, 1.15);
 luz.position.set(0, yBocal - 0.1, 0); luz.castShadow = sombras; luz.shadow.mapSize.set(CELULAR ? 512 : 1024, CELULAR ? 512 : 1024); luz.shadow.bias = -0.002; luz.shadow.radius = 4; luz.shadow.intensity = 0.45;
 function aplicarModo() {
-  renderer.setPixelRatio(razaoPixel()); ajustar(); luz.castShadow = sombras; renderer.shadowMap.needsUpdate = true;
+  renderer.setPixelRatio(razaoPixel()); ajustar(); luz.castShadow = sombras; renderer.shadowMap.needsUpdate = true; window.quartoPato?.sombra(sombras && modo === 'bonito');
   document.querySelectorAll('[data-modo]').forEach((b) => b.classList.toggle('on', b.dataset.modo === modo));
   const c = $('chkSombras'); if (c) c.checked = sombras;
   try { localStorage.setItem('quarto-modo', modo); localStorage.setItem('quarto-sombras', sombras ? '1' : '0'); } catch {}
@@ -230,19 +237,47 @@ const hipAlt = perna ? perna.getWorldPosition(vq).y : 0.26;
   s.rotation.x = -Math.PI / 2; s.position.y = 0.006; avatar.add(s);
 }
 
+// ---------- o Microduck (bichinho do quarto) ----------
+const pato = await criarPato(cena, {
+  escala: 2.6, inicio: { x: -0.7, z: 2.0, yaw: 2.6 }, empurrar, livre, limites: QUARTO,
+  gato: () => ({ x: eu.x, z: eu.z, yaw: eu.yaw, andando: eu.andando, sentado: eu.sentado, humor: humorAtual }),
+  luzAcesa: () => acesa,
+});
+const distPato = () => { const d = pato.pos(); return Math.hypot(eu.x - d.x, eu.z - d.z); };
+// o gatinho vai até o pato (para a uma certa distância, de frente para ele) e depois faz algo
+function irAtePato(dist, depois) {
+  const d = pato.pos(), dx = eu.x - d.x, dz = eu.z - d.z, l = Math.hypot(dx, dz) || 1, p = { x: d.x + dx / l * dist, z: d.z + dz / l * dist };
+  empurrar(p); pato.esperar(8);
+  const f = () => setTimeout(depois, 90);     // espera o "parar de andar" terminar, senão ele cancela o gesto
+  if (Math.hypot(p.x - eu.x, p.z - eu.z) < 0.2) { irAte(eu.x, eu.z, d.x, d.z, f); return; }
+  irAte(p.x, p.z, d.x, d.z, f);
+}
+const carinhoNoPato = () => irAtePato(0.8, () => { gato.acao('fazer_carinho_pato'); pato.receberCarinho(); });
+const brincarComPato = () => irAtePato(1.15, () => { gato.acao('dancar'); setTimeout(() => gato.acao('dancar'), 2800); pato.brincar(); });
+function darComida() {
+  levantar(); ir = null; if (eu.andando) { gato.parar(0.1); eu.andando = false; }
+  const p = { x: eu.x + Math.sin(eu.yaw) * 0.85, z: eu.z + Math.cos(eu.yaw) * 0.85 }; empurrar(p, 0.25);
+  gato.acao('jogar_comida'); setTimeout(() => pato.comida(p.x, p.z), 650);
+}
+function chamarPato() { if (eu.andando) { gato.parar(0.1); eu.andando = false; } gato.acao('acenar'); pato.chamar(); }
+const PATO = { chamar: ['Chamar', chamarPato], carinho: ['Fazer carinho', carinhoNoPato], brincar: ['Brincar', brincarComPato], comida: ['Dar comida', darComida],
+  dormir: ['Dormir / acordar', () => (pato.dormindo() ? pato.fazer.acordar() : pato.fazer.dormir())], quack: ['Pedir um quack', () => pato.fazer.quack()] };
+
 // humores e gestos (os mesmos do museu, sem os românticos)
 const HUMORES = { normal: 'Normal', feliz: 'Feliz', falando: 'Falando', triste: 'Triste', chorando: 'Chorando', brava: 'Bravo', irritada: 'Irritado', surpresa: 'Surpreso', tonta: 'Tonto', sono: 'Com sono', dormindo: 'Dormindo', marota: 'Maroto', envergonhada: 'Envergonhado' };
 const GESTOS = { tchau: 'Dar tchau', acenar: 'Acenar', pular: 'Pular', pulinhos: 'Pulinhos', comemorar: 'Comemorar', dancar: 'Dançar', palmas: 'Palmas', espreguicar: 'Espreguiçar', marchar: 'Marchar', girar: 'Girar', reverencia: 'Reverência', pensar: 'Pensar', olhar: 'Olhar ao redor', espirro: 'Espirrar', susto: 'Susto', timida: 'Tímido', sacudir: 'Sacudir', balancar: 'Balançar' };
 let humorAtual = 'normal', tTchau = null;
 const botao = (txt, fn) => { const b = document.createElement('button'); b.textContent = txt; b.addEventListener('click', fn); return b; };
 function marcarHumor() { for (const b of $('gradeHumores').children) b.classList.toggle('sel', b.dataset.h === humorAtual); }
-for (const [k, v] of Object.entries(HUMORES)) { const b = botao(v, () => { clearTimeout(tTchau); humorAtual = k; gato.humor(k); marcarHumor(); }); b.dataset.h = k; $('gradeHumores').append(b); }
+for (const [k, v] of Object.entries(HUMORES)) { const b = botao(v, () => { clearTimeout(tTchau); humorAtual = k; gato.humor(k); marcarHumor(); pato.reagir(k); }); b.dataset.h = k; $('gradeHumores').append(b); }
 for (const [k, v] of Object.entries(GESTOS)) $('gradeGestos').append(botao(v, () => {
   if (eu.andando) { gato.parar(0.1); eu.andando = false; }
   if (k === 'tchau') { gato.humor('tchau'); clearTimeout(tTchau); tTchau = setTimeout(() => gato.humor(humorAtual), 2600); }
   else gato.acao(k);
+  pato.reagir(k);
 }));
 marcarHumor();
+for (const [, [txt, fn]] of Object.entries(PATO)) $('gradePato').append(botao(txt, () => { fecharMenus(); fn(); }));
 $('btnEmocoes').addEventListener('click', () => { $('menu').classList.remove('on'); $('painel').classList.toggle('on'); });
 
 // ---------- sentar (no chão ou na cadeira) ----------
@@ -250,14 +285,14 @@ function sentar(onde) {
   if (eu.andando) { gato.parar(0.1); eu.andando = false; }
   ir = null;
   if (onde === 'cadeira') { eu.x = CAD.x; eu.z = CAD.z + 0.02; eu.yaw = Math.PI; eu.altSent = cadeira.alt + 0.03 - hipAlt; gato.sentar(true, false); }
-  else { eu.altSent = 0.02 - hipAlt; gato.sentar(true, true); }
+  else { eu.altSent = 0.02 - hipAlt; gato.sentar(true, true); pato.reagir('sentou'); }
   eu.sentado = onde; atualizarBotoes();
 }
 function levantar() {
   assistindo = false;
   if (!eu.sentado) return;
   if (eu.sentado === 'cadeira') { eu.z = CAD.z + 0.62; eu.yaw = 0; }
-  eu.sentado = null; gato.sentar(false); atualizarBotoes();
+  eu.sentado = null; gato.sentar(false); pato.reagir('levantou'); atualizarBotoes();
 }
 $('btnSentar').addEventListener('click', () => (eu.sentado ? levantar() : sentar('chao')));
 addEventListener('keydown', (e) => { if (e.code === 'KeyQ' && !e.repeat) (eu.sentado ? levantar() : sentar('chao')); });
@@ -294,6 +329,8 @@ const irAteCadeira = () => irAte(CAD.x + 0.05, CAD.z + 0.6, CAD.x, CAD.z, () => 
 
 // ---------- botões do que está perto ----------
 const PERTO = [
+  { id: 'patoCarinho', rotulo: () => 'Fazer carinho no pato', perto: () => !eu.sentado && distPato() < 1.7, fazer: carinhoNoPato },
+  { id: 'patoBrincar', rotulo: () => 'Brincar com o pato', perto: () => !eu.sentado && distPato() < 1.7, fazer: brincarComPato },
   { id: 'cordinha', rotulo: () => (acesa ? 'Apagar a luz' : 'Acender a luz'), perto: () => Math.hypot(eu.x - LAMPADA.x, eu.z - LAMPADA.z) < 1.6, fazer: pedirPuxar },
   { id: 'cadeira', rotulo: () => (eu.sentado === 'cadeira' ? 'Levantar da cadeira' : 'Sentar na cadeira'), perto: () => eu.sentado === 'cadeira' || Math.hypot(eu.x - CAD.x, eu.z - CAD.z) < 1.3, fazer: () => (eu.sentado === 'cadeira' ? levantar() : irAteCadeira()) },
   { id: 'entrada', rotulo: () => 'Bandeja de entrada' + (entradaN ? ` (${entradaN})` : ''), perto: () => eu.sentado === 'cadeira' || Math.hypot(eu.x - BAND.x, eu.z - (MESA.z + 0.6)) < 1.3, fazer: () => irAteEntrada() },
@@ -348,10 +385,11 @@ $('cena').addEventListener('pointerup', (e) => {
   if (!toque) return;
   fecharMenus();
   ponteiro.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); raio.setFromCamera(ponteiro, camera);
-  const hit = raio.intersectObjects([bandeja.g, pc.g, tv.g, alvoCorda, bulbo, puxador, estante.corpo, estante.tampa, bau.g, quadroBranco.g, cadeira.g, cena.getObjectByName('muralGrupo'), projetor.aparelho, projetor.ligado() ? projetor.imagem : null].filter(Boolean), true)[0];
+  const hit = raio.intersectObjects([bandeja.g, pc.g, tv.g, alvoCorda, bulbo, puxador, estante.corpo, estante.tampa, bau.g, quadroBranco.g, cadeira.g, cena.getObjectByName('muralGrupo'), projetor.aparelho, projetor.ligado() ? projetor.imagem : null, pato.grupo].filter(Boolean), true)[0];
   if (!hit || hit.distance > 7) return;
   const dono = (o, g) => { for (let p = o; p; p = p.parent) if (p === g) return true; return false; };
-  if (hit.object === estante.corpo || hit.object === estante.tampa) irAteCaixa(estante.caixas[hit.instanceId]);
+  if (dono(hit.object, pato.grupo)) carinhoNoPato();
+  else if (hit.object === estante.corpo || hit.object === estante.tampa) irAteCaixa(estante.caixas[hit.instanceId]);
   else if (dono(hit.object, bandeja.g)) irAteEntrada();
   else if (dono(hit.object, pc.g)) usarPc();
   else if (dono(hit.object, tv.g)) verTv();
@@ -405,7 +443,8 @@ const telaCheia = () => telaPc.aberta() || telaTv.aberta() || busca.aberto() || 
 let quadroN = 0, sombraN = 0;
 const virarPara = (x, z, dt, vel = 10) => { let d = Math.atan2(x - eu.x, z - eu.z) - eu.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); eu.yaw += d * Math.min(1, dt * vel); return Math.abs(d); };
 camera.position.set(eu.x + Math.sin(cam.yaw) * cam.dist, 1.6, eu.z + Math.cos(cam.yaw) * cam.dist);
-window.quarto = { busca, abrirEntrada, cam, eu, gato, projetor, irAssistir, pedirPuxar, abrirCaixa, abrirBau, irAteCaixa, irAteBau, quadro, mural, mapa, inventario, sentar, levantar };     // para testar pelo console
+window.quartoPato = pato;
+window.quarto = { pato, busca, abrirEntrada, cam, eu, gato, projetor, irAssistir, pedirPuxar, abrirCaixa, abrirBau, irAteCaixa, irAteBau, quadro, mural, mapa, inventario, sentar, levantar };     // para testar pelo console
 atualizarBotoes(true);
 let ultimoDesenho = 0, ultimaEntrada = performance.now(), ocioso = false;
 for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel']) addEventListener(ev, () => { ultimaEntrada = performance.now(); }, { passive: true });
@@ -464,6 +503,7 @@ renderer.setAnimationLoop(() => {
   if (kBraco > 0.001 || qSem.ativo) { bracoD.quaternion.copy(qSem.b); antebracoD.quaternion.copy(qSem.a); }
   gato.atualizar(dt);
   avatar.position.y = eu.altSent * gato.nivelSentado();
+  pato.atualizar(dt);
   qSem.b.copy(bracoD.quaternion); qSem.a.copy(antebracoD.quaternion); qSem.ativo = kBraco > 0.001;
   if (qSem.ativo) {
     bracoD.quaternion.multiply(qTmp.setFromAxisAngle(EZ, (2.5 - 0.35 * kPuxa) * kBraco)).multiply(qTmp.setFromAxisAngle(EX, -0.55 * kBraco));
@@ -504,7 +544,7 @@ renderer.setAnimationLoop(() => {
   if (telaCheia()) return;                                   // tela cheia por cima: não precisa desenhar o quarto
   if (inventario.aberto() && quadroN % 3) return;            // inventário aberto: desenha o quarto mais devagar
   const aparelhos = pc.atualizar(dt) | tv.atualizar(dt) | telaTv.atualizar(dt, tv.ligado());
-  const mexendo = aparelhos || projetor.tocando() || eu.andando || pux || ir || puxao > 0 || Math.abs(brilho - (acesa ? 1 : 0)) > 0.001 || gato.nivelSentado() % 1 !== 0 || estante.caixas.some((c) => c.a !== c.alvo);
+  const mexendo = aparelhos || projetor.tocando() || eu.andando || pato.mexendo() || pux || ir || puxao > 0 || Math.abs(brilho - (acesa ? 1 : 0)) > 0.001 || gato.nivelSentado() % 1 !== 0 || estante.caixas.some((c) => c.a !== c.alvo);
   if (mexendo) { sombraN = 0; if (quadroN % 2 === 0) renderer.shadowMap.needsUpdate = true; }
   else if (sombraN < 2) { sombraN++; renderer.shadowMap.needsUpdate = true; }
   ocioso = !mexendo && agora - ultimaEntrada > 2500 && !projetor.tocando();

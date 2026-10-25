@@ -277,6 +277,8 @@
   <div class="linha"><button id="btnBackup" class="forte">Fazer backup</button><button id="btnRestaurar">Restaurar backup</button></div>
   <div id="confirmaRestaurar" hidden><p>Restaurar troca tudo o que está guardado agora pelo que está no arquivo. Continuar?</p><div class="linha"><button id="naoRestaurar">Cancelar</button><button id="simRestaurar" class="perigo">Escolher o arquivo</button></div></div>
   <input id="arqBackup" type="file" accept=".json,application/json" hidden>
+  <h3>Créditos</h3>
+  <p>Microduck: modelo 3D de <a href="https://github.com/pollen-robotics/microduck_rl" target="_blank" rel="noopener" style="color:inherit">Pollen Robotics</a>, licença CC BY-SA-NC 4.0, simplificado e animado para o quarto.</p>
 </div>
 <div id="joy"><div id="knob"></div></div>
 <div id="interacoes"></div>
@@ -287,6 +289,7 @@
 <div id="painel" class="vidro">
   <h3>Como estou</h3><div class="grade" id="gradeHumores"></div>
   <h3>Gestos</h3><div class="grade" id="gradeGestos"></div>
+  <h3>Microduck</h3><div class="grade" id="gradePato"></div>
 </div>
 <div id="aviso" hidden></div>
 <div id="carregando"><div><h1>Nosso Quarto</h1><div id="barraFundo"><i id="barra"></i></div></div></div>
@@ -308,6 +311,6 @@
     setTimeout(function () { var c = document.getElementById('carregando'); if (c && !c.classList.contains('fim') && !document.getElementById('erroCarregar')) { var p = document.createElement('p'); p.id = 'erroCarregar'; p.textContent = 'Está demorando… a internet pode estar lenta. Se não abrir, recarregue a página.'; c.firstElementChild.appendChild(p); } }, 30000);
   })();
 </script>
-<script type="module" src="./main.js?v=202610250120"></script>
+<script type="module" src="./main.js?v=202610250300"></script>
 </body>
 </html>
